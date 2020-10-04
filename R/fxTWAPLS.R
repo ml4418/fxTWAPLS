@@ -47,7 +47,7 @@ fx <- function(x, bin) {
   return(fx)
 }
 
-#' WA-LPS training function, which can perform \code{fx} correction
+#' WA-PLS training function, which can perform \code{fx} correction
 #' 
 #' @importFrom stats lm
 #' 
@@ -206,7 +206,7 @@ WAPLS.w <- function(modern_taxa,
   return(list)
 }
 
-#' TWA-LPS training function, which can perform \code{fx} correction
+#' TWA-PLS training function, which can perform \code{fx} correction
 #' 
 #' @importFrom stats lm
 #' 
@@ -682,7 +682,7 @@ TWAPLS.predict.w <- function(TWAPLSoutput, fossil_taxa) {
 #'                                            fossil_taxa = core,
 #'                                            trainfun = fxTWAPLS::WAPLS.w,
 #'                                            predictfun = fxTWAPLS::WAPLS.predict.w,
-#'                                            nboot = 100,
+#'                                            nboot = 1000,
 #'                                            nPLS = 5,
 #'                                            nsig = 3,
 #'                                            usefx = FALSE,
@@ -695,7 +695,7 @@ TWAPLS.predict.w <- function(TWAPLSoutput, fossil_taxa) {
 #'                                              fossil_taxa = core,
 #'                                              trainfun = fxTWAPLS::WAPLS.w,
 #'                                              predictfun = fxTWAPLS::WAPLS.predict.w,
-#'                                              nboot = 100,
+#'                                              nboot = 1000,
 #'                                              nPLS = 5,
 #'                                              nsig = 3,
 #'                                              usefx = TRUE,
@@ -751,25 +751,30 @@ sse.sample <- function(modern_taxa,
   }
   xboot <- foreach::foreach(i = idx,
                             .combine = cbind) %dopar% {
+                              tryCatch({
                               # Extract list of row numbers by sampling with 
                               # replacement
                               k <- k_samples[, i]
-                              # k <- sample(1:nrow(modern_taxa),
-                              #             size = nrow(modern_taxa),
-                              #             replace = TRUE)
                               
                               # Reorganise modern_taxa obs in k order
-                              modern_taxa <- modern_taxa[k, ] 
-                              modern_climate <- modern_climate[k]
-                              col_not0 <- which(colSums(modern_taxa) > 0)
+                              modern_taxak <- modern_taxa[k, ] 
+                              modern_climatek <- modern_climate[k]
+                              fxk<-fx[k]
+                              col_not0 <- which(colSums(modern_taxak) > 0)
                               # Strip out zero-sum cols
-                              modern_taxa <- modern_taxa[, col_not0]
+                              modern_taxak <- modern_taxak[, col_not0]
                               # Apply train function, with modern_climate also 
                               # in k order
-                              mod <- trainfun(modern_taxa, modern_climate)
+                              if(usefx==FALSE){
+                                mod <- trainfun(modern_taxak, modern_climatek, nPLS=nPLS)
+                              }else{
+                                mod <- trainfun(modern_taxak, modern_climatek, nPLS=nPLS, usefx=TRUE, fx=fxk)
+                              }
+                              
                               # Make reconstruction
                               predictfun(mod, 
                                          fossil_taxa[, col_not0])$fit[, nsig]
+                              }, error=function(e){})
                             }
   parallel::stopCluster(cl) # Stop cluster
   
